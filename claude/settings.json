@@ -1,1 +1,25 @@
-{}
+{
+  "model": "opus",
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline.sh"
+  },
+  "enabledPlugins": {
+    "gopls-lsp@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "asyncapi-mcp@asyncapi-mcp": true,
+    "claude-md-management@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "asyncapi-mcp": {
+      "source": {
+        "source": "github",
+        "repo": "Souvikns/asyncapi-mcp"
+      }
+    }
+  },
+  "theme": "dark"
+}

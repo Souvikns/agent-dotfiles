@@ -1,4 +1,5 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "instructions": ["shared/*.md"]
+  "instructions": ["shared/*.md"],
+  "plugin": ["superpowers@git+https://github.com/obra/superpowers.git"]
 }
