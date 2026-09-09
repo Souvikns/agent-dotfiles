@@ -22,9 +22,9 @@ assert_fail "a malformed machine file fails even when it is not this machine" \
     sh "$SB/clone/scripts/validate.sh"
 printf '{}\n' > "$SB/clone/claude/machines/thinkpad.json"
 
-printf -- '---\nname: broken\n' > "$SB/clone/claude/skills/broken.md"
+printf -- '---\nname: broken\n' > "$SB/clone/skills/broken.md"
 assert_fail "unterminated frontmatter fails validation" sh "$SB/clone/scripts/validate.sh"
-rm "$SB/clone/claude/skills/broken.md"
+rm "$SB/clone/skills/broken.md"
 
 printf 'export TOKEN=/Users/someone/secret\n' > "$SB/clone/shared/leak.md"
 assert_fail "an absolute home path in installed content fails validation" \

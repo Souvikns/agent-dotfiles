@@ -15,7 +15,7 @@ assert_fail "uninstall without a manifest fails cleanly" sh "$UNINSTALL"
 sh "$INSTALL" --all --machine macbook >/dev/null
 
 sh "$UNINSTALL" --dry-run >/dev/null
-assert_link "dry run left the link" "$HOME/.claude/skills" "$REPO/claude/skills"
+assert_link "dry run left the link" "$HOME/.claude/skills" "$REPO/skills"
 
 rm "$HOME/.claude/agents"; ln -s "$SB/elsewhere" "$HOME/.claude/agents"
 rc=0; sh "$UNINSTALL" >/dev/null 2>&1 || rc=$?

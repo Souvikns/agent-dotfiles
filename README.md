@@ -31,18 +31,21 @@ install it with `brew install jq` or `apt install jq`.
 ```text
 shared/            tool-neutral instructions; Claude Code reads these as
                    user-level rules, OpenCode as its instructions glob
+skills/            skills, shared by both tools from one directory
 opencode/          OpenCode's global config: opencode.jsonc, AGENTS.md,
-                   agents/, commands/, skills/, plugins/
+                   agents/, commands/, plugins/
 opencode/machines/ per-machine OpenCode overrides
 claude/            Claude Code's global config: CLAUDE.md, settings.json,
                    keybindings.json, statusline.sh, agents/, commands/,
-                   skills/, workflows/, output-styles/, themes/
+                   workflows/, output-styles/, themes/
 claude/machines/   per-machine Claude Code overrides
 scripts/           install.sh, uninstall.sh, validate.sh
 ```
 
-`shared/` is one directory serving both tools through each tool's own
-documented mechanism, so no instruction text is duplicated.
+`shared/` and `skills/` are each one directory serving both tools, so nothing
+is duplicated. Skills are the only thing OpenCode reuses from `~/.claude` —
+agents, commands, output-styles, and settings are read by Claude Code alone, so
+those stay under `claude/`.
 
 ## Install
 

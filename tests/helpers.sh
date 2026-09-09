@@ -10,7 +10,7 @@ _fail() {
     TESTS_RUN=$((TESTS_RUN + 1)); TESTS_FAILED=$((TESTS_FAILED + 1))
     printf '  FAIL %s\n' "$1"
     shift
-    for _l in "$@"; do printf '       %s\n' "$_l"; done
+    for _l in "$@"; do printf '%s\n' "$_l" | sed 's/^/       | /'; done
 }
 
 assert_eq() {  # MSG EXPECTED ACTUAL

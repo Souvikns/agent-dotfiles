@@ -43,7 +43,7 @@ for f in "$AD_ROOT"/claude/machines/*.json; do
 done
 
 # --- markdown frontmatter ---------------------------------------------------
-find "$AD_ROOT/claude" "$AD_ROOT/opencode" "$AD_ROOT/shared" \
+find "$AD_ROOT/claude" "$AD_ROOT/opencode" "$AD_ROOT/shared" "$AD_ROOT/skills" \
      -name '*.md' -type f > "$tmp" 2>/dev/null || true
 while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -84,8 +84,8 @@ fi
 # Only content that actually gets installed is scanned. docs/ and tests/ are
 # excluded by design: the spec, the plan, and the settings tests all legitimately
 # quote a private path as example data.
-find "$AD_ROOT/shared" "$AD_ROOT/opencode" "$AD_ROOT/claude" "$AD_ROOT/scripts" \
-     -type f > "$tmp" 2>/dev/null || true
+find "$AD_ROOT/shared" "$AD_ROOT/opencode" "$AD_ROOT/claude" "$AD_ROOT/skills" \
+     "$AD_ROOT/scripts" -type f > "$tmp" 2>/dev/null || true
 if [ -f "$AD_ROOT/README.md" ]; then printf '%s\n' "$AD_ROOT/README.md" >> "$tmp"; fi
 hits=0
 while IFS= read -r f; do

@@ -82,12 +82,12 @@ repository directory is empty or absent.
 ```text
 agent-dotfiles/
 ├── shared/                     tool-neutral instruction markdown
+├── skills/                     skills, shared by BOTH tools
 ├── opencode/
 │   ├── opencode.jsonc
 │   ├── AGENTS.md
 │   ├── agents/
 │   ├── commands/
-│   ├── skills/
 │   ├── plugins/
 │   └── machines/
 │       ├── thinkpad.json
@@ -100,7 +100,6 @@ agent-dotfiles/
 │   ├── statusline.sh
 │   ├── agents/
 │   ├── commands/
-│   ├── skills/
 │   ├── workflows/
 │   ├── output-styles/
 │   ├── themes/
@@ -118,6 +117,21 @@ agent-dotfiles/
 ├── LICENSE
 └── .gitignore
 ```
+
+`skills/` is a single source linked into both tools. Verified 2026-09-09:
+skills are the **only** thing OpenCode reuses from `~/.claude` — its agents,
+commands, output-styles, rules, `settings.json`, and the MCP servers in
+`~/.claude.json` are all ignored. OpenCode reads `~/.claude/skills` natively, so
+the OpenCode link is redundant today; it is kept so the arrangement survives
+either tool changing that behaviour, and linking one source twice produces no
+duplicates because OpenCode dedupes by skill name.
+
+`~/.claude/CLAUDE.md` is read by OpenCode only as a **fallback**, when
+`~/.config/opencode/AGENTS.md` does not exist. Since this repository links an
+`AGENTS.md`, that fallback never fires — including when the linked `AGENTS.md`
+is empty, which suppresses it just as effectively. This is intended: shared
+instructions reach both tools through `shared/`, which combines rather than
+falling back.
 
 `shared/` is the single source of tool-neutral instructions. It is symlinked as
 Claude Code's user-level `rules/` directory and referenced by OpenCode's
@@ -162,7 +176,7 @@ sufficient: a newly added skill or agent appears without re-running the installe
 | `rules` | `shared/` | directory link |
 | `agents` | `claude/agents/` | directory link |
 | `commands` | `claude/commands/` | directory link |
-| `skills` | `claude/skills/` | directory link |
+| `skills` | `skills/` | directory link |
 | `workflows` | `claude/workflows/` | directory link |
 | `output-styles` | `claude/output-styles/` | directory link |
 | `themes` | `claude/themes/` | directory link |
@@ -179,7 +193,7 @@ sufficient: a newly added skill or agent appears without re-running the installe
 | `AGENTS.md` | `opencode/AGENTS.md` | file link |
 | `agents` | `opencode/agents/` | directory link |
 | `commands` | `opencode/commands/` | directory link |
-| `skills` | `opencode/skills/` | directory link |
+| `skills` | `skills/` | directory link |
 | `plugins` | `opencode/plugins/` | directory link |
 | `shared` | `shared/` | directory link |
 | `machine.json` | `opencode/machines/<name>.json` | file link |

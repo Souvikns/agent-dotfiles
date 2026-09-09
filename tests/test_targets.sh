@@ -12,6 +12,8 @@ assert_eq "claude table has 11 rows" "11" "$(printf '%s\n' "$rows" | grep -c .)"
 assert_eq "shared is linked as claude rules" \
     "dir|shared|$SB/home/.claude/rules" \
     "$(printf '%s\n' "$rows" | grep '/rules$')"
+assert_eq "skills is one source shared by both tools" "skills" \
+    "$(ad_row_source "$(printf '%s\n' "$rows" | grep '/skills$')")"
 assert_eq "settings is generated, not linked" \
     "gen" \
     "$(ad_row_kind "$(printf '%s\n' "$rows" | grep '/settings.json$')")"
@@ -27,6 +29,8 @@ assert_eq "machine file is linked to the fixed path" \
     "$(printf '%s\n' "$orows" | grep '/machine.json$')"
 assert_eq "node_modules is never an opencode target" "0" \
     "$(printf '%s\n' "$orows" | grep -c 'node_modules')"
+assert_eq "opencode skills point at the same shared source" "skills" \
+    "$(ad_row_source "$(printf '%s\n' "$orows" | grep '/skills$')")"
 
 row='dir|claude/skills|/tmp/x/skills'
 assert_eq "row kind accessor"   "dir"           "$(ad_row_kind   "$row")"

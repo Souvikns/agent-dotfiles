@@ -141,23 +141,55 @@ resolves against the repository, that row is unnecessary but harmless. Keeping
 the row is safe under both outcomes, so this does not block implementation — it
 only decides whether one link is redundant. The row is kept.
 
-## Incidental finding: OpenCode appears to read `~/.claude/skills`
+## What OpenCode reuses from Claude Code
 
-During the invalid assumption-4 run, OpenCode discovered and invoked
-`probe-skill`. That skill existed only under `~/.claude/skills` (a symlink to
-the probe directory at the time). `OPENCODE_CONFIG_DIR` pointed at a directory
-with no `skills/`, and the real `~/.config/opencode` has no `skills/` either, so
-`~/.claude/skills` is the only possible source.
+Probed 2026-09-09 in a sandbox, with a distinctly named file placed in every
+authored location under `~/.claude` and OpenCode's free `debug` commands used to
+see what it picked up. No model calls were needed.
 
-If this holds, `claude/skills/` and `opencode/skills/` in this repository are
-redundant and one directory could serve both tools. This is a single
-observation and a change to the spec's layout, so it is recorded rather than
-acted on. Worth a dedicated test before any consolidation.
+| Location under `~/.claude` | Reused by OpenCode? |
+| --- | --- |
+| `skills/` | **Yes** — verified and documented |
+| `CLAUDE.md` | **Fallback only** — read solely when `~/.config/opencode/AGENTS.md` is absent |
+| `agents/` | No |
+| `commands/` | No |
+| `output-styles/` | No |
+| `rules/` | No |
+| `settings.json` | No |
+| `~/.claude.json` MCP servers | No |
+
+```
+$ opencode debug skill | grep cskill
+    "name": "cskill",
+    "description": "CLAUDE-SKILL-PROBE",
+    "location": ".../home/.claude/skills/cskill/SKILL.md",
+
+$ opencode agent list | grep cagent
+  (no claude agent picked up)
+```
+
+The official documentation agrees: OpenCode supports "Claude Code's file
+conventions as fallbacks" for `AGENTS.md` and skills only.
+
+**Linking one skills directory into both tools produces no duplicates.** With
+the same source symlinked at `~/.claude/skills` and `~/.config/opencode/skills`,
+`opencode debug skill` reported the skill exactly once — OpenCode dedupes by
+name. The repository therefore keeps a single top-level `skills/` directory
+linked into both places. The OpenCode link is redundant while OpenCode reads
+`~/.claude/skills`, and is kept deliberately so the setup survives either tool
+changing that behaviour.
+
+**A trap worth recording:** because `CLAUDE.md` is a *fallback* rather than a
+merge, an **empty** `~/.config/opencode/AGENTS.md` suppresses `~/.claude/CLAUDE.md`
+just as effectively as a full one. This repository links an `AGENTS.md`, so the
+fallback never fires. That is intended — shared instructions reach both tools
+through `shared/`, which combines rather than falling back — but anyone
+expecting the fallback to be available should know it is not.
 
 ## Open questions
 
 1. Assumption 4 still needs a clean test: an `opencode run` with no Claude
    skills reachable, so the model cannot answer from a skill. Not blocking —
    the `shared` link is correct under either outcome.
-2. Whether OpenCode really reads `~/.claude/skills`. If it does, the two skills
-   directories can be consolidated.
+2. ~~Whether OpenCode really reads `~/.claude/skills`.~~ Confirmed; the two
+   skills directories have been consolidated into one top-level `skills/`.
