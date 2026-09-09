@@ -51,11 +51,13 @@ those stay under `claude/`.
 
 ```sh
 git clone https://github.com/Souvikns/agent-dotfiles.git ~/.agent-dotfiles
-~/.agent-dotfiles/scripts/install.sh --all --machine macbook
+~/.agent-dotfiles/scripts/install.sh --all --machine macos
 ```
 
-Use `thinkpad`, `macbook`, or `zephyrus-wsl` as the machine name. It is
-remembered, so later runs need no `--machine`.
+Use `macos`, `linux`, or `wsl` as the machine name. The names describe the
+platform rather than the hardware, so the ThinkPad is `linux` and the Zephyrus is
+`wsl` — that way a fourth machine on an existing platform needs no new name and
+no new machine file. The name is remembered, so later runs need no `--machine`.
 
 The installer then prints two lines to add to your shell startup file. They are
 identical on every machine, and it will not edit that file for you:
@@ -88,6 +90,48 @@ It is **not** enough for changes to `claude/settings.json` or
 
 That writes a `post-merge` hook into the clone, so every `git pull` re-runs the
 installer. After it, `git pull` really is the whole update workflow.
+
+## Day to day: `/sync`
+
+Both tools have a `/sync` command. It reports what has changed in the checkout,
+then fast-forwards and reinstalls:
+
+```sh
+~/.agent-dotfiles/scripts/sync.sh          # status, then pull and reinstall
+~/.agent-dotfiles/scripts/sync.sh status   # read-only
+```
+
+**It never commits.** There is no staging, commit, or push code in `sync.sh` at
+all — when there is something to commit it prints the command and stops. That is
+not a confirmation prompt that could be talked past; the capability is simply
+absent, so an agent driving the script cannot author history on your behalf.
+`pull` is `--ff-only` and refuses to merge or rebase a divergence for the same
+reason.
+
+## Adding someone else's skill
+
+```sh
+~/.agent-dotfiles/scripts/add-skill.sh owner/repo [--skill NAME] [--ref REF]
+~/.agent-dotfiles/scripts/add-skill.sh --update NAME
+~/.agent-dotfiles/scripts/add-skill.sh --list
+```
+
+This copies the skill into `skills/<name>/` as real files and records where it
+came from in a `.source` file, pinned to the upstream commit. Because both tools
+read `skills/` through a symlink into this repository, the skill is live in
+Claude Code and OpenCode the moment it lands, with no install step, and reaches
+your other machines on the next pull.
+
+Do **not** use `npx skills add` for skills you want to keep. It installs by
+symlinking the agent's skill directory at a copy elsewhere on the machine — and
+here that directory is this repository, so the link gets committed as a relative
+path that resolves to nothing anywhere else. `validate.sh` fails on any symlink
+under `skills/`.
+
+Plugins are a separate system and are **not** vendored. `claude/settings.json`
+carries `enabledPlugins` and `extraKnownMarketplaces`, so every machine agrees on
+which plugins it wants, but declaring a plugin does not download it: run
+`claude plugin install <name>@<marketplace>` once per machine.
 
 ## Per-machine configuration
 

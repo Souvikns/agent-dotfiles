@@ -9,7 +9,7 @@ SB=$(sandbox_new); eval "$(sandbox_env "$SB")"
 mkdir -p "$SB/repo/claude/machines" "$HOME/.claude"
 LIVE="$HOME/.claude/settings.json"
 BASE="$SB/repo/claude/settings.json"
-MACH="$SB/repo/claude/machines/macbook.json"
+MACH="$SB/repo/claude/machines/macos.json"
 
 # The live file carries what Claude Code wrote for itself, including the
 # private auto-mode block that must never enter the repository.
@@ -40,12 +40,12 @@ out2=$(ad_settings_merge /nonexistent "$BASE" /nonexistent)
 assert_eq "absent live and machine layers are tolerated" "opus" \
     "$(printf '%s' "$out2" | jq -r .model)"
 
-ad_settings_write "$SB/repo" macbook "$LIVE" 1 0
+ad_settings_write "$SB/repo" macos "$LIVE" 1 0
 assert_eq "clean regeneration drops live-only keys" "null" "$(jq -r '.theme' "$LIVE")"
 assert_eq "clean regeneration keeps repository keys" "sonnet" "$(jq -r .model "$LIVE")"
 
 printf '{"marker":"untouched"}\n' > "$LIVE"
-ad_settings_write "$SB/repo" macbook "$LIVE" 0 1
+ad_settings_write "$SB/repo" macos "$LIVE" 0 1
 assert_eq "dry run leaves the file untouched" "untouched" "$(jq -r .marker "$LIVE")"
 
 sandbox_rm "$SB"

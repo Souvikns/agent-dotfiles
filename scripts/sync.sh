@@ -1,10 +1,15 @@
 #!/bin/sh
 # sync.sh — the mechanics behind the /sync command in both tools.
 #
-# Deliberately split into small subcommands rather than one do-everything run:
-# the agent calls `status` first, shows you the result, and only then decides
-# whether to `push`. That confirmation step is the reason /sync exists at all
-# rather than a shell alias.
+# This script never writes git history. It reads the repository's state, tells
+# you what has changed, hands you the commit command, and then fast-forwards and
+# reinstalls. Committing is yours: an agent driving this script must not be able
+# to author commits on your behalf, and the surest way to guarantee that is for
+# the machinery to have no such capability at all.
+#
+# The corollary is that `pull` is genuinely read-mostly. It fast-forwards or it
+# stops; it will not merge or rebase to resolve a divergence, because that is
+# rewriting your history under a different name.
 set -eu
 
 AD_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
@@ -13,12 +18,15 @@ AD_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 
 usage() {
     cat <<'USAGE'
-Usage: sync.sh <status|push MESSAGE|pull>
+Usage: sync.sh [status|pull]
 
+  (no argument)  status, then pull — the everyday path
   status         machine, branch, remote, and uncommitted changes. Read-only.
-  push MESSAGE   stage everything, commit with MESSAGE, push if a remote exists
   pull           git pull --ff-only, then install.sh --all
   --help         this message
+
+Committing and pushing are deliberately absent. When there is something to
+commit, `status` prints the command for you to run yourself.
 
 Intended to be driven by the /sync command in Claude Code and OpenCode, but it
 works on its own too.
@@ -49,7 +57,7 @@ cmd_status() {
             ad_say "remote:  configured, but this branch has no upstream"
         fi
     else
-        ad_say "remote:  no remote configured — push and pull will do nothing"
+        ad_say "remote:  no remote configured — there is nothing to pull from yet"
     fi
 
     _dirty=$(git -C "$AD_ROOT" status --porcelain -uall)
@@ -58,29 +66,9 @@ cmd_status() {
     else
         ad_say "changes:"
         printf '%s\n' "$_dirty" | sed 's/^/  /'
-    fi
-}
-
-cmd_push() {
-    require_repo
-    if [ -z "${1:-}" ]; then
-        usage >&2
-        ad_die "push needs a commit message"
-    fi
-    if [ -z "$(git -C "$AD_ROOT" status --porcelain -uall)" ]; then
-        ad_say "nothing to commit"
-    else
-        git -C "$AD_ROOT" add -A
-        # Commit signing prompts for a passphrase, which cannot happen when an
-        # agent runs this. Say so plainly instead of failing cryptically.
-        if ! git -C "$AD_ROOT" commit -m "$1"; then
-            ad_die "commit failed. If this repository signs commits, the GPG passphrase prompt cannot appear here — run the commit yourself in a terminal, or set commit.gpgsign=false for this repository."
-        fi
-    fi
-    if has_remote; then
-        git -C "$AD_ROOT" push
-    else
-        ad_warn "no remote configured; the commit is local only"
+        ad_say ""
+        ad_say "Nothing was staged. Yours to commit when you are ready:"
+        ad_say "  git -C $AD_ROOT add -A && git -C $AD_ROOT commit -m \"...\""
     fi
 }
 
@@ -103,9 +91,9 @@ cmd_pull() {
 }
 
 case "${1:-}" in
+    "")         cmd_status; ad_say ""; cmd_pull ;;
     status)     cmd_status ;;
-    push)       shift; cmd_push "${1:-}" ;;
     pull)       cmd_pull ;;
     -h|--help)  usage ;;
-    *)          usage >&2; ad_die "unknown subcommand: ${1:-(none)}" ;;
+    *)          usage >&2; ad_die "unknown subcommand: $1" ;;
 esac

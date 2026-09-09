@@ -17,7 +17,7 @@
 - **Portability traps:** do not use `readlink -f` (differs BSD vs GNU), `realpath` (absent on older macOS), `sed -i` (differs), `mktemp -d` without a template, or GNU-only `find` predicates. Plain `readlink` is fine.
 - **Dependencies:** `jq` is the only hard runtime dependency. ShellCheck is optional locally, required in CI.
 - **The installer must never:** make a network request, install a package, or modify a shell startup file.
-- **Machine names:** `thinkpad`, `macbook`, `zephyrus-wsl`.
+- **Machine names:** `linux`, `macos`, `wsl`.
 - **Path variables**, used everywhere and always via the accessors in `lib/common.sh` so tests can sandbox them:
   - `CLAUDE_HOME` = `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`
   - `OPENCODE_HOME` = `${XDG_CONFIG_HOME:-$HOME/.config}/opencode`
@@ -234,7 +234,7 @@ for d in shared opencode/agents opencode/commands opencode/skills opencode/plugi
     touch "$d/.gitkeep"
 done
 printf '{}\n' > claude/settings.json
-for m in thinkpad macbook zephyrus-wsl; do
+for m in linux macos wsl; do
     printf '{}\n' > "claude/machines/$m.json"
     printf '{\n  "$schema": "https://opencode.ai/config.json"\n}\n' > "opencode/machines/$m.json"
 done
@@ -465,15 +465,15 @@ set -u
 SB=$(sandbox_new); eval "$(sandbox_env "$SB")"
 
 assert_fail "load fails before any name is recorded" ad_machine_load
-assert_ok   "valid name accepted" ad_machine_valid zephyrus-wsl
+assert_ok   "valid name accepted" ad_machine_valid wsl
 assert_fail "name with a slash rejected" ad_machine_valid "bad/name"
 assert_fail "empty name rejected" ad_machine_valid ""
 
-ad_machine_save macbook
-assert_eq "load returns the saved name" "macbook" "$(ad_machine_load)"
-assert_eq "resolve with no argument reads the saved name" "macbook" "$(ad_machine_resolve)"
-assert_eq "resolve with an argument overrides" "thinkpad" "$(ad_machine_resolve thinkpad)"
-assert_eq "an override persists for next time" "thinkpad" "$(ad_machine_load)"
+ad_machine_save macos
+assert_eq "load returns the saved name" "macos" "$(ad_machine_load)"
+assert_eq "resolve with no argument reads the saved name" "macos" "$(ad_machine_resolve)"
+assert_eq "resolve with an argument overrides" "linux" "$(ad_machine_resolve linux)"
+assert_eq "an override persists for next time" "linux" "$(ad_machine_load)"
 
 sandbox_rm "$SB"
 ```
@@ -580,10 +580,10 @@ assert_eq "plugins is never a claude target" "0" \
 assert_eq "projects is never a claude target" "0" \
     "$(printf '%s\n' "$rows" | grep -c '/.claude/projects$')"
 
-orows=$(ad_targets_opencode thinkpad)
+orows=$(ad_targets_opencode linux)
 assert_eq "opencode table has 8 rows" "8" "$(printf '%s\n' "$orows" | grep -c .)"
 assert_eq "machine file is linked to the fixed path" \
-    "file|opencode/machines/thinkpad.json|$SB/home/.config/opencode/machine.json" \
+    "file|opencode/machines/linux.json|$SB/home/.config/opencode/machine.json" \
     "$(printf '%s\n' "$orows" | grep '|machine.json$')"
 assert_eq "node_modules is never an opencode target" "0" \
     "$(printf '%s\n' "$orows" | grep -c 'node_modules')"
@@ -787,9 +787,9 @@ set -u
 
 SB=$(sandbox_new); eval "$(sandbox_env "$SB")"
 
-ad_manifest_init "$SB/repo" macbook
+ad_manifest_init "$SB/repo" macos
 assert_file "manifest created" "$(ad_manifest_path)"
-assert_eq "machine recorded" "macbook" "$(ad_manifest_machine)"
+assert_eq "machine recorded" "macos" "$(ad_manifest_machine)"
 assert_eq "revision of a non-repo is unknown" "unknown" \
     "$(jq -r .revision "$(ad_manifest_path)")"
 assert_eq "targets start empty" "0" \
@@ -1066,7 +1066,7 @@ SB=$(sandbox_new); eval "$(sandbox_env "$SB")"
 mkdir -p "$SB/repo/claude/machines" "$HOME/.claude"
 LIVE="$HOME/.claude/settings.json"
 BASE="$SB/repo/claude/settings.json"
-MACH="$SB/repo/claude/machines/macbook.json"
+MACH="$SB/repo/claude/machines/macos.json"
 
 # The live file carries what Claude Code wrote for itself, including the
 # private auto-mode block that must never enter the repository.
@@ -1099,14 +1099,14 @@ assert_eq "absent live and machine layers are tolerated" "opus" \
     "$(printf '%s' "$out2" | jq -r .model)"
 
 # --clean drops the live layer entirely
-ad_settings_write "$SB/repo" macbook "$LIVE" 1 0
+ad_settings_write "$SB/repo" macos "$LIVE" 1 0
 assert_eq "clean regeneration drops live-only keys" "null" \
     "$(jq -r '.theme' "$LIVE")"
 assert_eq "clean regeneration keeps repository keys" "sonnet" "$(jq -r .model "$LIVE")"
 
 # dry run writes nothing
 printf '{"marker":"untouched"}\n' > "$LIVE"
-ad_settings_write "$SB/repo" macbook "$LIVE" 0 1
+ad_settings_write "$SB/repo" macos "$LIVE" 0 1
 assert_eq "dry run leaves the file untouched" "untouched" "$(jq -r .marker "$LIVE")"
 
 sandbox_rm "$SB"
@@ -1213,33 +1213,33 @@ SB=$(sandbox_new); eval "$(sandbox_env "$SB")"
 INSTALL="$REPO/scripts/install.sh"
 
 assert_ok "--help works and exits 0" sh "$INSTALL" --help
-assert_fail "no component flag is a usage error" sh "$INSTALL" --machine macbook
+assert_fail "no component flag is a usage error" sh "$INSTALL" --machine macos
 assert_fail "no machine on first run is an error" sh "$INSTALL" --all
 
 # dry run changes nothing
-sh "$INSTALL" --all --machine macbook --dry-run >/dev/null
+sh "$INSTALL" --all --machine macos --dry-run >/dev/null
 assert_fail "dry run created no claude dir" test -e "$HOME/.claude/skills"
 assert_fail "dry run wrote no manifest" test -e "$(ad_state_home)/manifest.json"
 assert_fail "dry run recorded no machine name" test -e "$(ad_config_home)/machine"
 
 # real install
-sh "$INSTALL" --all --machine macbook >/dev/null
+sh "$INSTALL" --all --machine macos >/dev/null
 assert_link "skills linked" "$HOME/.claude/skills" "$REPO/claude/skills"
 assert_link "rules linked to shared" "$HOME/.claude/rules" "$REPO/shared"
 assert_link "opencode machine.json linked" \
-    "$HOME/.config/opencode/machine.json" "$REPO/opencode/machines/macbook.json"
+    "$HOME/.config/opencode/machine.json" "$REPO/opencode/machines/macos.json"
 assert_file "settings generated" "$HOME/.claude/settings.json"
 assert_fail "settings is a real file, not a link" test -L "$HOME/.claude/settings.json"
 assert_fail "plugins never linked" test -L "$HOME/.claude/plugins"
 assert_file "manifest written" "$(ad_state_home)/manifest.json"
-assert_eq "machine recorded" "macbook" "$(cat "$(ad_config_home)/machine")"
+assert_eq "machine recorded" "macos" "$(cat "$(ad_config_home)/machine")"
 
 # idempotence
 before=$(ls -1 "$(ad_state_home)/backups" 2>/dev/null | wc -l | tr -d ' ')
 sh "$INSTALL" --all >/dev/null
 after=$(ls -1 "$(ad_state_home)/backups" 2>/dev/null | wc -l | tr -d ' ')
 assert_eq "rerun creates no new backup" "$before" "$after"
-assert_eq "rerun needs no --machine" "macbook" "$(cat "$(ad_config_home)/machine")"
+assert_eq "rerun needs no --machine" "macos" "$(cat "$(ad_config_home)/machine")"
 assert_link "rerun left the link alone" "$HOME/.claude/skills" "$REPO/claude/skills"
 
 # conflict refusal
@@ -1256,7 +1256,7 @@ assert_eq "exactly one backup generation exists" "1" \
 
 # component selectivity
 sandbox_rm "$SB"; SB=$(sandbox_new); eval "$(sandbox_env "$SB")"
-sh "$INSTALL" --claude --machine thinkpad >/dev/null
+sh "$INSTALL" --claude --machine linux >/dev/null
 assert_file "claude-only install touched claude" "$HOME/.claude/skills"
 assert_fail "claude-only install did not touch opencode" test -e "$HOME/.config/opencode/agents"
 
@@ -1473,7 +1473,7 @@ UNINSTALL="$REPO/scripts/uninstall.sh"
 assert_ok "--help works" sh "$UNINSTALL" --help
 assert_fail "uninstall without a manifest fails cleanly" sh "$UNINSTALL"
 
-sh "$INSTALL" --all --machine macbook >/dev/null
+sh "$INSTALL" --all --machine macos >/dev/null
 
 # dry run removes nothing
 sh "$UNINSTALL" --dry-run >/dev/null
@@ -1498,7 +1498,7 @@ assert_fail "force removed the generated settings" test -e "$HOME/.claude/settin
 # --restore puts a backup back
 sandbox_rm "$SB"; SB=$(sandbox_new); eval "$(sandbox_env "$SB")"
 mkdir -p "$HOME/.claude/skills/mine"; printf 'original\n' > "$HOME/.claude/skills/mine/SKILL.md"
-sh "$INSTALL" --claude --machine macbook --force >/dev/null
+sh "$INSTALL" --claude --machine macos --force >/dev/null
 sh "$UNINSTALL" --restore >/dev/null
 assert_file "restore returned the displaced content" "$HOME/.claude/skills/mine/SKILL.md"
 assert_eq "restored content is intact" "original" "$(cat "$HOME/.claude/skills/mine/SKILL.md")"
@@ -1665,10 +1665,10 @@ printf '{"model": }\n' > "$SB/clone/claude/settings.json"
 assert_fail "malformed settings.json fails validation" sh "$SB/clone/scripts/validate.sh"
 printf '{}\n' > "$SB/clone/claude/settings.json"
 
-printf '{"model": }\n' > "$SB/clone/claude/machines/thinkpad.json"
+printf '{"model": }\n' > "$SB/clone/claude/machines/linux.json"
 assert_fail "a malformed machine file fails even when it is not this machine" \
     sh "$SB/clone/scripts/validate.sh"
-printf '{}\n' > "$SB/clone/claude/machines/thinkpad.json"
+printf '{}\n' > "$SB/clone/claude/machines/linux.json"
 
 printf -- '---\nname: broken\n' > "$SB/clone/claude/skills/broken.md"
 assert_fail "unterminated frontmatter fails validation" sh "$SB/clone/scripts/validate.sh"
@@ -1684,7 +1684,7 @@ assert_ok "clone validates again once the faults are removed" sh "$SB/clone/scri
 sandbox_rm "$SB"
 ```
 
-The `thinkpad.json` case matters: a machine file broken on the MacBook must fail there, or the breakage only surfaces after it has been pulled onto the ThinkPad.
+The `linux.json` case matters: a machine file broken on the MacBook must fail there, or the breakage only surfaces after it has been pulled onto the ThinkPad.
 
 - [ ] **Step 2: Run to verify it fails**
 
@@ -1866,7 +1866,7 @@ It must cover, in this order, matching the spec's documentation requirements:
 6. **Install**, with the exact commands:
    ```sh
    git clone "$REPOSITORY_URL" ~/.agent-dotfiles
-   ~/.agent-dotfiles/scripts/install.sh --all --machine macbook
+   ~/.agent-dotfiles/scripts/install.sh --all --machine macos
    ```
    plus the two shell lines the installer prints.
 7. **Selective install** — `--claude` and `--opencode` separately.

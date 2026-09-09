@@ -7,9 +7,9 @@ set -u
 
 SB=$(sandbox_new); eval "$(sandbox_env "$SB")"
 
-ad_manifest_init "$SB/repo" macbook
+ad_manifest_init "$SB/repo" macos
 assert_file "manifest created" "$(ad_manifest_path)"
-assert_eq "machine recorded" "macbook" "$(ad_manifest_machine)"
+assert_eq "machine recorded" "macos" "$(ad_manifest_machine)"
 assert_eq "revision of a non-repo is unknown" "unknown" \
     "$(jq -r .revision "$(ad_manifest_path)")"
 assert_eq "targets start empty" "0" \

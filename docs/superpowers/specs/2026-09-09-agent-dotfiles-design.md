@@ -58,12 +58,15 @@ derives the repository root from its own resolved path.
 
 ### Machine identity
 
-Each machine is given an explicit name at install time — `thinkpad`, `macbook`,
-`zephyrus-wsl` — written to `~/.config/agent-dotfiles/machine` and read
-automatically on later runs.
+Each machine is given an explicit name at install time — `macos`, `linux`,
+`wsl` — written to `~/.config/agent-dotfiles/machine` and read automatically on
+later runs.
 
 Explicit names rather than `hostname` because hostnames are personal, unstable,
-and would be baked into a public repository.
+and would be baked into a public repository. The names describe the platform
+rather than the device, so a second Linux laptop reuses `linux` and needs no new
+machine file — what differs between machines here is almost always the operating
+system, not the hardware.
 
 Per-machine files **are committed**. The point of the repository is that all
 three machines' configuration is visible from any one of them. Values too
@@ -90,9 +93,9 @@ agent-dotfiles/
 │   ├── commands/
 │   ├── plugins/
 │   └── machines/
-│       ├── thinkpad.json
-│       ├── macbook.json
-│       └── zephyrus-wsl.json
+│       ├── linux.json
+│       ├── macos.json
+│       └── wsl.json
 ├── claude/
 │   ├── CLAUDE.md
 │   ├── settings.json
@@ -104,9 +107,9 @@ agent-dotfiles/
 │   ├── output-styles/
 │   ├── themes/
 │   └── machines/
-│       ├── thinkpad.json
-│       ├── macbook.json
-│       └── zephyrus-wsl.json
+│       ├── linux.json
+│       ├── macos.json
+│       └── wsl.json
 ├── scripts/
 │   ├── install.sh
 │   ├── uninstall.sh
@@ -331,7 +334,7 @@ A new machine, start to finish:
 
 ```sh
 git clone "$REPOSITORY_URL" ~/.agent-dotfiles
-~/.agent-dotfiles/scripts/install.sh --all --machine zephyrus-wsl
+~/.agent-dotfiles/scripts/install.sh --all --machine wsl
 ```
 
 The installer then prints the two shell lines from "Private values" and reports
@@ -373,7 +376,7 @@ Rollback is `git checkout` of a known-good revision followed by
 - `jq` is present.
 - All JSON parses; `opencode.jsonc` parses as JSONC.
 - The base-plus-machine merge produces valid JSON **for every machine**, not
-  only the current one. A malformed `thinkpad.json` must fail on the MacBook.
+  only the current one. A malformed `linux.json` must fail on the MacBook.
 - Markdown frontmatter in skill and agent files is well-formed.
 - Referenced paths resolve: the `statusLine` command, and a non-empty
   `instructions` glob.

@@ -12,7 +12,7 @@ UNINSTALL="$REPO/scripts/uninstall.sh"
 assert_ok   "--help works" sh "$UNINSTALL" --help
 assert_fail "uninstall without a manifest fails cleanly" sh "$UNINSTALL"
 
-sh "$INSTALL" --all --machine macbook >/dev/null
+sh "$INSTALL" --all --machine macos >/dev/null
 
 sh "$UNINSTALL" --dry-run >/dev/null
 assert_link "dry run left the link" "$HOME/.claude/skills" "$REPO/skills"
@@ -31,7 +31,7 @@ assert_fail "force removed the generated settings" test -e "$HOME/.claude/settin
 
 sandbox_rm "$SB"; SB=$(sandbox_new); eval "$(sandbox_env "$SB")"
 mkdir -p "$HOME/.claude/skills/mine"; printf 'original\n' > "$HOME/.claude/skills/mine/SKILL.md"
-sh "$INSTALL" --claude --machine macbook --force >/dev/null
+sh "$INSTALL" --claude --machine macos --force >/dev/null
 sh "$UNINSTALL" --restore >/dev/null
 assert_file "restore returned the displaced content" "$HOME/.claude/skills/mine/SKILL.md"
 assert_eq   "restored content is intact" "original" "$(cat "$HOME/.claude/skills/mine/SKILL.md")"

@@ -55,6 +55,21 @@ while IFS= read -r f; do
     fi
 done < "$tmp"
 
+# --- no symlinks in versioned content ---------------------------------------
+# Both tools read skills/ through a symlink pointing at this repository, so a
+# skill installer that links rather than copies (npx skills does, by default)
+# writes its link straight into the working tree. Committed, it becomes a
+# relative path that resolves to nothing on any other machine.
+find "$AD_ROOT/claude" "$AD_ROOT/opencode" "$AD_ROOT/shared" "$AD_ROOT/skills" \
+     -type l > "$tmp" 2>/dev/null || true
+links=0
+while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    bad "symlink in versioned content: ${f#"$AD_ROOT"/} -> $(readlink "$f")"
+    links=1
+done < "$tmp"
+if [ "$links" -eq 0 ]; then ok "no symlinks in versioned content"; fi
+
 # --- referenced paths resolve ----------------------------------------------
 if [ -f "$AD_ROOT/claude/statusline.sh" ]; then
     if [ -x "$AD_ROOT/claude/statusline.sh" ]; then ok "statusline.sh is executable"

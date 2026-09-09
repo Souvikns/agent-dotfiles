@@ -22,10 +22,10 @@ assert_eq "plugins is never a claude target" "0" \
 assert_eq "projects is never a claude target" "0" \
     "$(printf '%s\n' "$rows" | grep -c '/.claude/projects$')"
 
-orows=$(ad_targets_opencode thinkpad)
+orows=$(ad_targets_opencode linux)
 assert_eq "opencode table has 8 rows" "8" "$(printf '%s\n' "$orows" | grep -c .)"
 assert_eq "machine file is linked to the fixed path" \
-    "file|opencode/machines/thinkpad.json|$SB/home/.config/opencode/machine.json" \
+    "file|opencode/machines/linux.json|$SB/home/.config/opencode/machine.json" \
     "$(printf '%s\n' "$orows" | grep '/machine.json$')"
 assert_eq "node_modules is never an opencode target" "0" \
     "$(printf '%s\n' "$orows" | grep -c 'node_modules')"

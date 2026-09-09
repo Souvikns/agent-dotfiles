@@ -17,10 +17,10 @@ assert_fail "malformed settings.json fails validation" sh "$SB/clone/scripts/val
 printf '{}\n' > "$SB/clone/claude/settings.json"
 
 # A machine file broken here must fail here, not after it reaches that machine.
-printf '{"model": }\n' > "$SB/clone/claude/machines/thinkpad.json"
+printf '{"model": }\n' > "$SB/clone/claude/machines/linux.json"
 assert_fail "a malformed machine file fails even when it is not this machine" \
     sh "$SB/clone/scripts/validate.sh"
-printf '{}\n' > "$SB/clone/claude/machines/thinkpad.json"
+printf '{}\n' > "$SB/clone/claude/machines/linux.json"
 
 printf -- '---\nname: broken\n' > "$SB/clone/skills/broken.md"
 assert_fail "unterminated frontmatter fails validation" sh "$SB/clone/scripts/validate.sh"
@@ -30,6 +30,13 @@ printf 'export TOKEN=/Users/someone/secret\n' > "$SB/clone/shared/leak.md"
 assert_fail "an absolute home path in installed content fails validation" \
     sh "$SB/clone/scripts/validate.sh"
 rm "$SB/clone/shared/leak.md"
+
+# `npx skills add` symlinks into ~/.claude/skills, which is this repository.
+# Committing that symlink would push a path that resolves to nothing anywhere
+# else, so validation has to catch it here.
+ln -s /some/where/else "$SB/clone/skills/linked"
+assert_fail "a symlinked skill fails validation" sh "$SB/clone/scripts/validate.sh"
+rm "$SB/clone/skills/linked"
 
 assert_ok "clone validates again once the faults are removed" sh "$SB/clone/scripts/validate.sh"
 
