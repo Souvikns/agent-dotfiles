@@ -92,4 +92,30 @@ assert_fail "--update refuses a skill it did not vendor" sh "$ADD" --update mine
 out=$(sh "$ADD" --list 2>&1)
 assert_eq "--list ignores locally authored skills" "0" "$(printf '%s' "$out" | grep -c '^mine')"
 
+# --all vendors every skill in a package from a single clone. A package with
+# fourteen skills should not mean fourteen network fetches.
+rm -rf "$HOME/.agent-dotfiles/skills/demo" "$HOME/.agent-dotfiles/skills/other"
+assert_fail "--all and --skill together are refused" sh "$ADD" "$UP" --all --skill demo
+assert_ok   "--all vendors the whole package" sh "$ADD" "$UP" --all
+assert_file "--all took the first skill"  "$HOME/.agent-dotfiles/skills/demo/SKILL.md"
+assert_file "--all took the second skill" "$HOME/.agent-dotfiles/skills/other/SKILL.md"
+assert_file "--all recorded provenance per skill" "$HOME/.agent-dotfiles/skills/other/.source"
+assert_eq "--all copied real files, no symlinks" "0" \
+    "$(find "$HOME/.agent-dotfiles/skills" -type l | wc -l | tr -d ' ')"
+
+# A collision must not abort the rest of the batch.
+printf 'local edit\n' >> "$HOME/.agent-dotfiles/skills/demo/SKILL.md"
+rm -rf "$HOME/.agent-dotfiles/skills/other"
+out=$(sh "$ADD" "$UP" --all 2>&1); rc=$?
+assert_eq "--all succeeds despite an existing skill" "0" "$rc"
+assert_eq "--all names the skill it skipped" "1" \
+    "$(printf '%s\n' "$out" | grep -c '^  skipped demo ')"
+assert_eq "--all left the local edit alone" "1" \
+    "$(grep -c 'local edit' "$HOME/.agent-dotfiles/skills/demo/SKILL.md")"
+assert_file "--all still added the missing one" "$HOME/.agent-dotfiles/skills/other/SKILL.md"
+
+assert_ok "--all --force replaces existing skills" sh "$ADD" "$UP" --all --force
+assert_eq "--all --force dropped the local edit" "0" \
+    "$(grep -c 'local edit' "$HOME/.agent-dotfiles/skills/demo/SKILL.md")"
+
 sandbox_rm "$SB"

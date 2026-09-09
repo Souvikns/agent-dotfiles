@@ -22,12 +22,13 @@ SKILLS_DIR="$AD_ROOT/skills"
 
 usage() {
     cat <<'USAGE'
-Usage: add-skill.sh SOURCE [--skill NAME] [--ref REF] [--force]
+Usage: add-skill.sh SOURCE [--skill NAME | --all] [--ref REF] [--force]
        add-skill.sh --update NAME [--force]
        add-skill.sh --list
 
   SOURCE       owner/repo, a git URL, or a local path to a skill package
   --skill NAME which skill to take, when the package holds more than one
+  --all        take every skill in the package, from a single fetch
   --ref REF    branch or tag to fetch (default: the package's default branch)
   --force      replace a skill that is already here (the old copy is backed up)
   --update     refetch a vendored skill from the source recorded in its .source
@@ -75,7 +76,7 @@ fetch() {  # RESOLVED_SOURCE REF DEST
     fi
 }
 
-# --- locating the skill inside the package ----------------------------------
+# --- locating skills inside the package -------------------------------------
 
 # The layouts seen in the wild, in the order the ecosystem uses them.
 SEARCH_ROOTS='skills .agents/skills .claude/skills .'
@@ -91,38 +92,78 @@ locate_named() {  # CLONE NAME -> path relative to the clone
     return 1
 }
 
-# With no --skill, a package holding exactly one skill is unambiguous and a
-# package holding several is not. Guessing is worse than asking.
-locate_only() {  # CLONE -> path relative to the clone
+list_skills() {  # CLONE -> every skill path relative to the clone
     if [ -f "$1/SKILL.md" ]; then printf '.\n'; return 0; fi
-    _found=$(
-        for _r in $SEARCH_ROOTS; do
-            if [ -d "$1/$_r" ]; then
-                for _d in "$1/$_r"/*/; do
-                    if [ -f "$_d/SKILL.md" ]; then
-                        printf '%s\n' "$(printf '%s' "${_d%/}" | sed "s|^$1/||")"
-                    fi
-                done
-            fi
-        done | sort -u
-    )
+    for _r in $SEARCH_ROOTS; do
+        if [ -d "$1/$_r" ]; then
+            for _d in "$1/$_r"/*/; do
+                if [ -f "$_d/SKILL.md" ]; then
+                    printf '%s\n' "$(printf '%s' "${_d%/}" | sed "s|^$1/||")"
+                fi
+            done
+        fi
+    done | sort -u
+}
+
+# With neither --skill nor --all, a package holding exactly one skill is
+# unambiguous and a package holding several is not. Guessing is worse than asking.
+locate_only() {  # CLONE -> path relative to the clone
+    _found=$(list_skills "$1")
     _n=$(printf '%s' "$_found" | grep -c . || true)
-    if [ "$_n" -eq 1 ]; then
-        printf '%s\n' "$_found"
-        return 0
-    fi
-    if [ "$_n" -eq 0 ]; then
-        ad_die "no SKILL.md found in that package"
-    fi
-    ad_warn "that package holds more than one skill; choose one with --skill NAME:"
+    if [ "$_n" -eq 1 ]; then printf '%s\n' "$_found"; return 0; fi
+    if [ "$_n" -eq 0 ]; then ad_die "no SKILL.md found in that package"; fi
+    ad_warn "that package holds more than one skill; choose one with --skill NAME, or take them all with --all:"
     printf '%s\n' "$_found" | sed 's|.*/||; s/^/  /' >&2
     exit 1
 }
 
+# --- copying ----------------------------------------------------------------
+
+skill_name() {  # CLONE_REL RAW_SOURCE WANTED
+    if [ -n "$3" ]; then printf '%s\n' "$3"; return 0; fi
+    if [ "$1" = "." ]; then
+        basename -- "$(printf '%s' "$2" | sed 's|\.git$||; s|/$||')"
+    else
+        basename -- "$1"
+    fi
+}
+
+# Returns 0 when the skill was written, 2 when it was left alone because it
+# already exists and --force was not given.
+copy_one() {  # CLONE REL NAME RAW REF SHA FORCE
+    _dest="$SKILLS_DIR/$3"
+    case "$3" in
+        ""|.|..|*/*) ad_die "refusing to write a skill named '$3'" ;;
+    esac
+    if [ -e "$_dest" ]; then
+        if [ "$7" -ne 1 ]; then return 2; fi
+        _slot=$(ad_backup_move "$(ad_timestamp)" "$_dest")
+        ad_say "backed up the previous copy to $_slot"
+    fi
+    mkdir -p "$_dest"
+    # tar rather than cp -R so the upstream .git, if the skill sits at the
+    # package root, does not come along for the ride.
+    ( cd "$1/$2" && tar cf - --exclude .git . ) | ( cd "$_dest" && tar xf - )
+    cat > "$_dest/.source" <<PROV
+source: $4
+ref: ${5:-(default branch)}
+commit: $6
+path: $2
+name: $3
+fetched: $(ad_timestamp)
+PROV
+}
+
+commit_hint() {  # WHAT MESSAGE
+    ad_say ""
+    ad_say "Nothing was staged. Yours to commit:"
+    ad_say "  git -C $AD_ROOT add $1 && git -C $AD_ROOT commit -m \"$2\""
+}
+
 # --- the vendoring itself ---------------------------------------------------
 
-vendor() {  # RAW_SOURCE REF WANTED_NAME FORCE
-    _raw=$1; _ref=$2; _want=$3; _force=$4
+vendor() {  # RAW_SOURCE REF WANTED_NAME FORCE ALL
+    _raw=$1; _ref=$2; _want=$3; _force=$4; _all=$5
     _src=$(resolve_source "$_raw")
 
     _tmp=$(mktemp -d "${TMPDIR:-/tmp}/agent-dotfiles-skill.XXXXXX")
@@ -132,55 +173,49 @@ vendor() {  # RAW_SOURCE REF WANTED_NAME FORCE
     if ! fetch "$_src" "$_ref" "$_tmp/pkg" 2>/dev/null; then
         ad_die "could not fetch $_src${_ref:+ at $_ref}"
     fi
+    _sha=$(git -C "$_tmp/pkg" rev-parse HEAD)
 
-    if [ -n "$_want" ]; then
-        _rel=$(locate_named "$_tmp/pkg" "$_want") \
-            || ad_die "no skill named '$_want' in that package"
+    if [ "$_all" -eq 1 ]; then
+        _rels=$(list_skills "$_tmp/pkg")
+        if [ -z "$_rels" ]; then ad_die "no SKILL.md found in that package"; fi
+        _added=0; _skipped=0
+        # A collision on one skill must not abandon the other thirteen.
+        printf '%s\n' "$_rels" > "$_tmp/rels"
+        while IFS= read -r _rel; do
+            [ -n "$_rel" ] || continue
+            _name=$(skill_name "$_rel" "$_raw" "")
+            _rc=0
+            copy_one "$_tmp/pkg" "$_rel" "$_name" "$_raw" "$_ref" "$_sha" "$_force" || _rc=$?
+            if [ "$_rc" -eq 2 ]; then
+                ad_say "  skipped $_name (already here; --force replaces it)"
+                _skipped=$((_skipped + 1))
+            else
+                ad_say "  added   $_name"
+                _added=$((_added + 1))
+            fi
+        done < "$_tmp/rels"
+        ad_say "$_added added, $_skipped skipped, from $_raw at $(printf '%s' "$_sha" | cut -c1-7)"
+        commit_hint "skills" "add skills from $_raw"
     else
-        _rel=$(locate_only "$_tmp/pkg")
-    fi
-
-    if [ "$_rel" = "." ]; then
-        _name=${_want:-$(basename -- "$(printf '%s' "$_raw" | sed 's|\.git$||; s|/$||')")}
-    else
-        _name=${_want:-$(basename -- "$_rel")}
-    fi
-    case "$_name" in
-        ""|.|..|*/*) ad_die "refusing to write a skill named '$_name'" ;;
-    esac
-
-    _dest="$SKILLS_DIR/$_name"
-    if [ -e "$_dest" ]; then
-        if [ "$_force" -ne 1 ]; then
+        if [ -n "$_want" ]; then
+            _rel=$(locate_named "$_tmp/pkg" "$_want") \
+                || ad_die "no skill named '$_want' in that package"
+        else
+            _rel=$(locate_only "$_tmp/pkg")
+        fi
+        _name=$(skill_name "$_rel" "$_raw" "$_want")
+        _rc=0
+        copy_one "$_tmp/pkg" "$_rel" "$_name" "$_raw" "$_ref" "$_sha" "$_force" || _rc=$?
+        if [ "$_rc" -eq 2 ]; then
             ad_die "skills/$_name already exists. Re-run with --force to replace it (the current copy is backed up first), or use --update to refetch it from its recorded source."
         fi
-        _slot=$(ad_backup_move "$(ad_timestamp)" "$_dest")
-        ad_say "backed up the previous copy to $_slot"
+        ad_say "vendored $_name -> skills/$_name (from $_raw at $(printf '%s' "$_sha" | cut -c1-7))"
+        commit_hint "skills/$_name" "add $_name skill"
     fi
-
-    mkdir -p "$_dest"
-    # tar rather than cp -R so the upstream .git, if the skill sits at the
-    # package root, does not come along for the ride.
-    ( cd "$_tmp/pkg/$_rel" && tar cf - --exclude .git . ) | ( cd "$_dest" && tar xf - )
-
-    _sha=$(git -C "$_tmp/pkg" rev-parse HEAD)
-    cat > "$_dest/.source" <<PROV
-source: $_raw
-ref: ${_ref:-(default branch)}
-commit: $_sha
-path: $_rel
-name: $_name
-fetched: $(ad_timestamp)
-PROV
 
     rm -rf "$_tmp"
     trap - EXIT INT TERM
-
-    ad_say "vendored $_name -> skills/$_name (from $_raw at ${_sha%"${_sha#???????}"})"
-    ad_say "live now in Claude Code and OpenCode; no install step needed."
-    ad_say ""
-    ad_say "Nothing was staged. Yours to commit:"
-    ad_say "  git -C $AD_ROOT add skills/$_name && git -C $AD_ROOT commit -m \"add $_name skill\""
+    ad_say "Live now in Claude Code and OpenCode; no install step needed."
 }
 
 prov_field() { sed -n "s/^$2: //p" "$1/.source" 2>/dev/null | head -1; }
@@ -195,7 +230,7 @@ cmd_update() {  # NAME
     _r=$(prov_field "$_d" ref)
     case "$_r" in "(default branch)") _r="" ;; esac
     if [ -z "$_s" ]; then ad_die "skills/$1/.source does not record a source"; fi
-    vendor "$_s" "$_r" "$1" 1
+    vendor "$_s" "$_r" "$1" 1 0
 }
 
 cmd_list() {
@@ -214,11 +249,12 @@ cmd_list() {
 
 # --- argument handling ------------------------------------------------------
 
-SOURCE=''; WANT=''; REF=''; FORCE=0; MODE='add'; UPDATE_NAME=''
+SOURCE=''; WANT=''; REF=''; FORCE=0; ALL=0; MODE='add'; UPDATE_NAME=''
 while [ $# -gt 0 ]; do
     case "$1" in
         --skill)  shift; WANT=${1:-}; if [ -z "$WANT" ]; then ad_die "--skill needs a name"; fi ;;
         --ref)    shift; REF=${1:-};  if [ -z "$REF" ];  then ad_die "--ref needs a branch or tag"; fi ;;
+        --all)    ALL=1 ;;
         --force)  FORCE=1 ;;
         --update) MODE='update'; shift; UPDATE_NAME=${1:-}; if [ -z "$UPDATE_NAME" ]; then ad_die "--update needs a skill name"; fi ;;
         --list)   MODE='list' ;;
@@ -229,11 +265,15 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+if [ "$ALL" -eq 1 ] && [ -n "$WANT" ]; then
+    ad_die "--all takes the whole package; drop --skill, or drop --all to take just one"
+fi
+
 case "$MODE" in
     list)   cmd_list ;;
     update) cmd_update "$UPDATE_NAME" ;;
     add)
         if [ -z "$SOURCE" ]; then usage >&2; ad_die "a source is required"; fi
-        vendor "$SOURCE" "$REF" "$WANT" "$FORCE"
+        vendor "$SOURCE" "$REF" "$WANT" "$FORCE" "$ALL"
         ;;
 esac
