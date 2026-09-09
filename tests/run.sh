@@ -10,12 +10,18 @@ failed=0
 for t in test_*.sh; do
     [ -e "$t" ] || continue
     printf '%s\n' "$t"
-    out=$(sh "$t" 2>&1)
+    out=$(sh "$t" 2>&1); rc=$?
     printf '%s\n' "$out"
     n=$(printf '%s\n' "$out" | grep -c '^  ok   \|^  FAIL ' || true)
     f=$(printf '%s\n' "$out" | grep -c '^  FAIL ' || true)
     total=$((total + n))
     failed=$((failed + f))
+    # A file that dies before asserting reports no failures; without this the
+    # suite would pass silently on a crashed test.
+    if [ "$rc" -ne 0 ]; then
+        printf '  ERROR %s exited %s before finishing\n' "$t" "$rc"
+        failed=$((failed + 1))
+    fi
 done
 
 printf '\n%s assertions, %s failed\n' "$total" "$failed"
