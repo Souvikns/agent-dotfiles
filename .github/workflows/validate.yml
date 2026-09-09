@@ -1,0 +1,32 @@
+# The matrix exists because these scripts run on macOS and Linux, and the two
+# differ on readlink, sed, and date. A Linux-only job would not catch a BSD
+# incompatibility before it reached the MacBook.
+name: validate
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq and shellcheck (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y jq shellcheck
+
+      - name: Install jq and shellcheck (macOS)
+        if: runner.os == 'macOS'
+        run: brew install jq shellcheck
+
+      - name: Validate
+        run: sh scripts/validate.sh
+
+      - name: Test
+        run: sh tests/run.sh
