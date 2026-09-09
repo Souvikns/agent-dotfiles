@@ -12,7 +12,7 @@ for t in test_*.sh; do
     printf '%s\n' "$t"
     out=$(sh "$t" 2>&1); rc=$?
     printf '%s\n' "$out"
-    n=$(printf '%s\n' "$out" | grep -c '^  ok   \|^  FAIL ' || true)
+    n=$(printf '%s\n' "$out" | grep -cE '^  (ok|FAIL) ' || true)
     f=$(printf '%s\n' "$out" | grep -c '^  FAIL ' || true)
     total=$((total + n))
     failed=$((failed + f))

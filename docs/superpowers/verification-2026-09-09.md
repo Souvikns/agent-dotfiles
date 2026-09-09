@@ -6,10 +6,10 @@ to a temporary directory (`tests/sandbox.sh`).
 
 | # | Assumption | Result |
 | --- | --- | --- |
-| 1 | Claude Code follows symlinked config directories | **BLOCKED** |
+| 1 | Claude Code follows symlinked config directories | **PASS** |
 | 2 | OpenCode follows symlinked config directories | **PASS** |
-| 3 | `rules/*.md` accepts Markdown with and without frontmatter | **BLOCKED** |
-| 4 | `instructions` glob resolves against the config dir | **INCONCLUSIVE** |
+| 3 | `rules/*.md` accepts Markdown with and without frontmatter | **PASS** |
+| 4 | `instructions` glob resolves against the config dir | **UNRESOLVED** (test invalid) |
 | 5 | `OPENCODE_CONFIG` merges above the global config | **PASS** |
 | 6 | Regenerating `settings.json` preserves Claude Code's own writes | **PASS**, with two surprises |
 | 7 | A symlinked `statusline.sh` executes | **PASS** |
@@ -85,17 +85,29 @@ $ "$CLAUDE_CONFIG_DIR/statusline.sh"          # PROBE-STATUSLINE
 
 The executable bit resolves through the link and the script runs.
 
-## 1 and 3 — BLOCKED on authentication
+## 1 and 3 — PASS
 
-Claude Code exits with `Not logged in · Please run /login` before it discovers
-skills, agents, or rules, because the sandbox redirects `HOME` away from the
-credentials. Pre-seeding `.claude.json` with `hasCompletedOnboarding` did not
-get past it. The debug log contains no discovery lines at all, so nothing can
-be concluded either way.
+A sandbox cannot verify these: Claude Code exits with `Not logged in` before it
+discovers skills, agents, or rules, because redirecting `HOME` hides the
+credentials, and pre-seeding `.claude.json` with `hasCompletedOnboarding` does
+not get past it. They were verified instead in an authenticated session, with
+`~/.claude/skills` and `~/.claude/rules` temporarily swapped for symlinks:
 
-Verifying these requires an authenticated session. See "Open questions".
+```
+## Skills available
+**Probe / project**
+- `probe-skill` — temporary verification probe
+```
 
-## 4 — INCONCLUSIVE
+- **1**: the symlinked `skills/` directory was read. The `dir` rows of the
+  Claude target table are sound.
+- **3a**: a rule file *with* YAML frontmatter loaded.
+- **3b**: a rule file *without* frontmatter loaded.
+
+Both rule forms work, so `shared/*.md` can serve as Claude Code's `rules/` and
+OpenCode's `instructions` without a frontmatter convention imposed on either.
+
+## 4 — UNRESOLVED: the test was invalid
 
 `opencode debug config` echoes `instructions` unresolved:
 
@@ -110,14 +122,42 @@ directory or against the repository where the symlinked `opencode.jsonc`
 actually lives. Debug logging at `DEBUG` level adds nothing about instruction
 loading. Deciding this needs a real session, which costs a model call.
 
+A session-based retest was attempted and **produced no usable evidence**. The
+OpenCode call ran while the Claude probe was still symlinked at
+`~/.claude/skills`, and the model answered by invoking that skill rather than
+reading the instruction file:
+
+```
+→ Skill "probe-skill"
+PROBE-SKILL-VISIBLE
+```
+
+The absence of the instruction token reflects a hijacked question, not a failed
+glob. Do not read that run as a FAIL.
+
 **Consequence either way:** if the glob resolves against the configuration
 directory, the `dir|shared|$OPENCODE_HOME/shared` row is required. If it
 resolves against the repository, that row is unnecessary but harmless. Keeping
 the row is safe under both outcomes, so this does not block implementation — it
-only decides whether one link is redundant.
+only decides whether one link is redundant. The row is kept.
+
+## Incidental finding: OpenCode appears to read `~/.claude/skills`
+
+During the invalid assumption-4 run, OpenCode discovered and invoked
+`probe-skill`. That skill existed only under `~/.claude/skills` (a symlink to
+the probe directory at the time). `OPENCODE_CONFIG_DIR` pointed at a directory
+with no `skills/`, and the real `~/.config/opencode` has no `skills/` either, so
+`~/.claude/skills` is the only possible source.
+
+If this holds, `claude/skills/` and `opencode/skills/` in this repository are
+redundant and one directory could serve both tools. This is a single
+observation and a change to the spec's layout, so it is recorded rather than
+acted on. Worth a dedicated test before any consolidation.
 
 ## Open questions
 
-1. Assumptions 1 and 3 need an authenticated Claude Code session against a
-   sandboxed `CLAUDE_CONFIG_DIR`.
-2. Assumption 4 needs one `opencode run` call with a real provider credential.
+1. Assumption 4 still needs a clean test: an `opencode run` with no Claude
+   skills reachable, so the model cannot answer from a skill. Not blocking —
+   the `shared` link is correct under either outcome.
+2. Whether OpenCode really reads `~/.claude/skills`. If it does, the two skills
+   directories can be consolidated.
