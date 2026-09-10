@@ -39,7 +39,8 @@ claude/            Claude Code's global config: CLAUDE.md, settings.json,
                    keybindings.json, statusline.sh, agents/, commands/,
                    workflows/, output-styles/, themes/
 claude/machines/   per-machine Claude Code overrides
-scripts/           install.sh, uninstall.sh, validate.sh
+scripts/           install.sh, uninstall.sh, validate.sh, sync.sh,
+                   add-skill.sh, init-project.sh
 ```
 
 `shared/` and `skills/` are each one directory serving both tools, so nothing
@@ -132,6 +133,53 @@ Plugins are a separate system and are **not** vendored. `claude/settings.json`
 carries `enabledPlugins` and `extraKnownMarketplaces`, so every machine agrees on
 which plugins it wants, but declaring a plugin does not download it: run
 `claude plugin install <name>@<marketplace>` once per machine.
+
+## Setting up a project: `/init-project`
+
+Everything above is global. A single project usually wants its own rules, skills,
+and commands too, and those live in the project rather than here. Both tools have
+an `/init-project` command for that:
+
+```sh
+~/.agent-dotfiles/scripts/init-project.sh [DIR] [--settings] [--mcp] [--dry-run]
+```
+
+It writes only what is missing, so running it on a project that already has half
+the layout fills in the other half and touches nothing else.
+
+```text
+CLAUDE.md              read by BOTH — Claude Code as project memory, OpenCode
+                       as it globs up for AGENTS.md / CLAUDE.md / CONTEXT.md
+opencode.json          OpenCode's project config; its instructions glob is what
+                       points OpenCode at the shared rules below
+.claude/rules/*.md     read by BOTH
+.claude/skills/        read by BOTH, natively, with no configuration at all
+.claude/agents/        Claude Code only
+.claude/commands/      Claude Code only
+.opencode/agent/       OpenCode only
+.opencode/command/     OpenCode only
+```
+
+Three of the six surfaces are shared, and none of them needs a symlink: OpenCode
+looks for skills in `.opencode/skills`, `.claude/skills`, **and** `.agents/skills`,
+and it will read `.claude/rules/*.md` as instructions once `opencode.json` names
+that glob — which is the one line the generated config exists to carry.
+
+Agents and commands get a directory per tool because the formats are not
+interchangeable. An agent file written for Claude Code, with `tools:` as a
+comma-separated string, does not merely fail to load in OpenCode — it stops
+OpenCode from starting: *Expected object | undefined, got "Read, Grep, Bash"*.
+Commands would in fact survive being shared, but a symlinked directory inside a
+project is a trap for whoever clones it next.
+
+`.claude/settings.json` and `.mcp.json` are Claude-Code-only and are written only
+with `--settings` and `--mcp`. Personal, uncommitted overrides go in
+`.claude/settings.local.json`, which is worth adding to the project's
+`.gitignore`.
+
+Like every script here, it stages nothing and prints the `git` command.
+See `docs/superpowers/verification-2026-09-10.md` for how each of these
+behaviours was probed.
 
 ## Per-machine configuration
 
